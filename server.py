@@ -1,8 +1,7 @@
 """
 Author: Joseph Malibiran
-Last Modified: October 14, 2020
+Last Modified: October 20, 2020
 """
-
 
 import random
 import socket
@@ -21,6 +20,8 @@ clients = {}
 
 #Queue
 msgQueue = queue.Queue() 
+
+acceptedClientVersion = 'v0.1.0 indev'
 
 # Connection loop continuously listens for messages and stores them in a queue to be processed separately
 def connectionLoop(sock):
@@ -43,16 +44,21 @@ def processMessages(sock):
          msgDict = json.loads(msgQueue.get())
 
          if msgDict['flag'] == 1: # New Client Connection
-            srcAddress = msgDict['ip'] + ":"  + msgDict['port']
-            clients[srcAddress] = {}
-            clients[srcAddress]['lastPong'] = datetime.now()
-            clients[srcAddress]['ip'] = str(msgDict['ip'])
-            clients[srcAddress]['port'] = str(msgDict['port'])
-            clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
-            clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
-            print('[Notice] New client connected: ', str(srcAddress))
 
-         elif msgDict['flag'] == 3: # Client Pong
+            if msgDict['message'] == acceptedClientVersion:
+               srcAddress = msgDict['ip'] + ":"  + msgDict['port']
+               clients[srcAddress] = {}
+               clients[srcAddress]['lastPong'] = datetime.now()
+               clients[srcAddress]['ip'] = str(msgDict['ip'])
+               clients[srcAddress]['port'] = str(msgDict['port'])
+               clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
+               clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
+               print('[Notice] New client connected: ', str(srcAddress))
+            else:
+               sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
+               print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
+
+         elif msgDict['flag'] == 4: # Client Pong
             keyString = msgDict['ip'] + ":"  + msgDict['port']
             print('[Routine] Received client pong from: ', keyString)
 
@@ -74,11 +80,25 @@ def cleanClients(sock):
 
 # Every loop, the server updates the current state of the game. This game state contains the id’s and colours of all the players currently in the game.
 # Every loop, the server sends a message containing the current state of the game. This game state contains the id’s and colours of all players currently in the game.
+#TODO
 def gameLoop(sock):
    while True:
       print('')
       
       time.sleep(0.033)
+
+#Sends a message to client at provided address containing provided flag
+def sendFlagMsg(sock, targetIP, targetPort, flagType):
+
+   print('[Routine] Sending flag to client ', targetIP + ":" + targetPort)
+
+   flagDict = {}
+   flagDict['flag'] = flagType 
+   flagMsg = json.dumps(flagDict)
+
+   clients_lock.acquire()
+   sock.sendto(bytes(flagMsg,'utf8'), (targetIP, int(targetPort)))
+   clients_lock.release()
 
 #Pings every connected client
 def routinePing(sock):
@@ -89,7 +109,7 @@ def routinePing(sock):
    print('[Routine] Pinging clients...')
 
    flagDict = {}
-   flagDict['flag'] = 2 
+   flagDict['flag'] = 3 
    pingMsg = json.dumps(flagDict)
    clients_lock.acquire()
 
@@ -128,6 +148,7 @@ def routinePongCheck():
 
          clients_lock.release()
 
+#TODO
 def updateClientsOnDisconnect():
    print('')
 
