@@ -1,6 +1,6 @@
 """
 Author: Joseph Malibiran
-Last Modified: October 20, 2020
+Last Modified: October 22, 2020
 """
 
 import random
@@ -66,14 +66,17 @@ def processMessages(sock):
                clients[srcAddress]['lastPong'] = datetime.now()
                clients[srcAddress]['ip'] = str(msgDict['ip'])
                clients[srcAddress]['port'] = str(msgDict['port'])
+               clients[srcAddress]['initialLobby'] = 0
                clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
                clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
                print('[Notice] New client connected: ', str(srcAddress))
+               sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 1) # Tells client it has mutual connection established
             else:
                sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
                print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
          elif msgDict['flag'] == 4: # Client Pong
-            print('[Routine] Received client pong from: ', srcAddress)
+            if verboseDebug:
+               print('[Routine] Received client pong from: ', srcAddress)
 
             if srcAddress in clients:
                clients[srcAddress]['lastPong'] = datetime.now()
@@ -86,14 +89,20 @@ def processMessages(sock):
                playerLobbyQueue.put(srcAddress)
             else:
                print('[Warning] Client not connected; Cannot process matchmaking.')
+         elif msgDict['flag'] == 11: # Leave lobby request
+            print('[Notice] Received request to leave lobby from: ', srcAddress)
+            if srcAddress in clients:
+               removePlayerFromLobby(sock, srcAddress)
+            else:
+               print('[Warning] Client not connected; Cannot process matchmaking.')
 
 #This thread focuses on jobs that will execute every 2 seconds. 
 def slowRoutines(sock):
    while True:
       routinePing(sock) #Pings every connected client; we expect a Pong message response from each of them. 
-      routinePongCheck() #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
+      routinePongCheck(sock) #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
       
-      processMatchmaking() 
+      processMatchmaking(sock) 
 
       time.sleep(2)
 
@@ -102,13 +111,16 @@ def fastRoutines(sock):
    while True:
       print('')
       
+      #TODO remove empty lobbies
+
       time.sleep(0.033)
 
 #Sends a message to client at provided address containing provided flag
 def sendFlagMsg(sock, targetIP, targetPort, flagType):
    global clients_lock
 
-   print('[Routine] Sending flag to client ', targetIP + ":" + targetPort)
+   if verboseDebug:
+      print('[Routine] Sending flag to client ', targetIP + ":" + targetPort)
 
    flagDict = {}
    flagDict['flag'] = flagType 
@@ -125,7 +137,8 @@ def routinePing(sock):
    if len(clients) <= 0:
       return
 
-   print('[Routine] Pinging clients...')
+   if verboseDebug:
+      print('[Routine] Pinging clients...')
 
    flagDict = {}
    flagDict['flag'] = 3 
@@ -134,13 +147,14 @@ def routinePing(sock):
 
    for clientKey in clients:
       sock.sendto(bytes(pingMsg,'utf8'), (clients[clientKey]['ip'],int(clients[clientKey]['port'])))
-      print(' - Pinging client: ', clientKey)
+      if verboseDebug:
+         print(' - Pinging client: ', clientKey)
 
    clients_lock.release()
 
 #Every Ping message to a client initiates a Pong message response to the server. 
 #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
-def routinePongCheck():
+def routinePongCheck(sock):
    global clients_lock
 
    if len(clients) <= 0:
@@ -157,6 +171,9 @@ def routinePongCheck():
          # Drop the client from the game.
          print('[Notice] Dropped Client: ', droppedClientIP + ":" + droppedClientPort)
          clients_lock.acquire()
+
+         #delete player from lobby if applicable TODO untested
+         removePlayerFromLobby(sock, dropedClientAddress)
          del clients[dropedClientAddress]
          
          #Sends a message to all clients currently connected to inform them of the dropped player. 
@@ -169,7 +186,8 @@ def routinePongCheck():
 
          clients_lock.release()
 
-def processMatchmaking():
+def processMatchmaking(sock):
+   global clients
    global lobbies
    global lobbyQueue
    global playerLobbyQueue
@@ -177,27 +195,42 @@ def processMatchmaking():
    findLobbyForPlayer = True
    createNewLobby = False
 
-   while playerLobbyQueue.empty() == False: # Go through all players in queue. TODO Note: potential issue of stalling here if there are an enormous amount of people waiting to join a lobby in a span of two seconds
+   #Note: potential issue of stalling here if there are an enormous amount of people waiting to join a lobby in the span of two seconds
+   #TODO place either a time limit on the operation or a player process quota
+
+   while playerLobbyQueue.empty() == False: # Go through all players in queue. 
       clientKey = playerLobbyQueue.get() # Pop player
-      
-      while findLobbyForPlayer:
-         if initialLobbyKey != 0: # If there is a lobby being processed 
-            if initialLobbyKey in lobbies:
-               if lobbies[initialLobbyKey]['minPlayers'] < lobbies[initialLobbyKey]['maxPlayers']: # Lobby has space
-                  print('[Notice] Adding player to lobby ', clientKey)
-                  lobbies[initialLobbyKey].append(clientKey) # Add player to lobby
-                  findLobbyForPlayer = False # break while loop
-               elif lobbies[initialLobbyKey]['minPlayers'] >= lobbies[initialLobbyKey]['maxPlayers']: # Lobby is full
+
+      while findLobbyForPlayer: # Loop through process in finding a suitable lobby for initial player
+         if clientKey in clients: 
+            if initialLobbyKey != 0: # If there is a lobby being processed 
+               if initialLobbyKey in lobbies:
+                  if lobbies[initialLobbyKey]['minPlayers'] < lobbies[initialLobbyKey]['maxPlayers']: # Lobby has space
+                     print('[Notice] Adding player ' + clientKey + ' to lobby ' + str(initialLobbyKey))
+                     lobbies[initialLobbyKey]['playerList'].append(clientKey) # Add player to lobby
+                     clients[clientKey]['initialLobby'] = initialLobbyKey # save lobby key in player data
+                     sendFlagMsg(sock, clients[clientKey]['ip'], clients[clientKey]['port'], 10) # send affirmation message to client
+                     findLobbyForPlayer = False # break while loop
+                  elif lobbies[initialLobbyKey]['minPlayers'] >= lobbies[initialLobbyKey]['maxPlayers']: # Lobby is full
+                     if lobbyQueue.empty() == False:
+                        print('[Debug] Loading next lobby...')
+                        initialLobbyKey = lobbyQueue.get() #load next lobby
+                        #continue loop
+                     elif lobbyQueue.empty() == True:
+                        #create lobby
+                        createNewLobby = True #create new lobby
+                        findLobbyForPlayer = False # break while loop
+               else:
                   if lobbyQueue.empty() == False:
-                     print('[Debug] Loading next lobby...')
+                     print('[Notice] Lobby does not exist anymore; Loading next lobby...')
                      initialLobbyKey = lobbyQueue.get() #load next lobby
                      #continue loop
                   elif lobbyQueue.empty() == True:
+                     print('[Notice] Lobby does not exist anymore; Creating new lobby...')
                      #create lobby
                      createNewLobby = True #create new lobby
                      findLobbyForPlayer = False # break while loop
-            else:
-               print('[Error] Invalid lobby key!')
+            elif initialLobbyKey == 0:
                if lobbyQueue.empty() == False:
                   print('[Debug] Loading next lobby...')
                   initialLobbyKey = lobbyQueue.get() #load next lobby
@@ -206,30 +239,26 @@ def processMatchmaking():
                   #create lobby
                   createNewLobby = True #create new lobby
                   findLobbyForPlayer = False # break while loop
-         elif initialLobbyKey == 0:
-            if lobbyQueue.empty() == False:
-               print('[Debug] Loading next lobby...')
-               initialLobbyKey = lobbyQueue.get() #load next lobby
-               #continue loop
-            elif lobbyQueue.empty() == True:
-               #create lobby
-               createNewLobby = True #create new lobby
-               findLobbyForPlayer = False # break while loop
+         else:
+            print('[Notice] Player not connected; processing next player (if any)...')
+            findLobbyForPlayer = False # break while loop
 
-      findLobbyForPlayer = True
+      findLobbyForPlayer = True # Reset for next loop 
 
       if createNewLobby == True:
-         createNewLobby = False
+         createNewLobby = False # Reset for next loop 
          #create lobby
-         print('[Notice] Creating new lobby with host ', clientKey)
          newlobbyKey = getNewLobbyIndex()
+         print('[Notice] Creating new lobby (id: ' + str(newlobbyKey) + ') with host: ' + clientKey)
          lobbies[newlobbyKey] = {} # New lobby
          lobbies[newlobbyKey]['minPlayers'] = 2
          lobbies[newlobbyKey]['maxPlayers'] = 8
          lobbies[newlobbyKey]['host'] = clientKey # Person who can change lobby settings; Not server host
-         lobbies[newlobbyKey]['players'] = {}
-         lobbies[newlobbyKey]['players'].append(clientKey) # Add player to lobby
+         lobbies[newlobbyKey]['playerList'] = []
+         lobbies[newlobbyKey]['playerList'].append(clientKey) # Add player to lobby
+         clients[clientKey]['initialLobby'] = newlobbyKey
          lobbyQueue.put(newlobbyKey) # put new lobby in queue
+         sendFlagMsg(sock, clients[clientKey]['ip'], clients[clientKey]['port'], 10) # send affirmation message to client
          
 #TODO
 def updateClientsOnDisconnect():
@@ -242,6 +271,30 @@ def getNewLobbyIndex():
    if lobbyKeyCounter > 65530:
       lobbyKeyCounter = 1
    return lobbyKeyCounter
+
+def removePlayerFromLobby(sock, clientKey):
+   global clients
+   global lobbies
+   global playerLobbyQueue
+
+   lobbykey = clients[clientKey]['initialLobby']
+
+   if clientKey in clients:
+      if clients[clientKey]['initialLobby'] != 0:
+         lobbies[lobbykey]['playerList'].remove(clientKey) #TODO untested
+
+         clients[clientKey]['initialLobby'] = 0
+         sendFlagMsg(sock, clients[clientKey]['ip'], clients[clientKey]['port'], 11) # send affirmation message to client
+
+         #remove lobby if empty TODO untested
+         if len(lobbies[lobbykey]['playerList']) <= 0:
+            lobbies.pop(lobbykey)
+      
+def printConnectedClients():
+   global clients
+   print('[Notice] Connected Clients:')
+   for client in list(clients.keys()):
+      print('    - ', client)
 
 def main():
    print('[Notice] Setting up server... ')
