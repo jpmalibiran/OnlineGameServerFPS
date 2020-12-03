@@ -12,6 +12,8 @@ from datetime import datetime
 import json
 import queue
 
+import auth as serverAuth
+
 class Server:
 
    def __init__(self):
@@ -105,17 +107,8 @@ class Server:
             msgDict = json.loads(self.msgQueue.get()) # Note: msgQueue.get() is pop; removes foremost item and returns it.
             srcAddress = msgDict['ip'] + ":"  + msgDict['port']
 
-            if msgDict['flag'] == 1: # New Client Connection
+            if msgDict['flag'] == 1: # New Client Connection. 
                if msgDict['version'] == self.acceptedClientVersion:
-                  self.clients[srcAddress] = {}
-                  self.clients[srcAddress]['lastPong'] = datetime.now()
-                  self.clients[srcAddress]['username'] = msgDict['username']
-                  self.clients[srcAddress]['id'] = self.getNewClientID()
-                  self.clients[srcAddress]['ip'] = str(msgDict['ip'])
-                  self.clients[srcAddress]['port'] = str(msgDict['port'])
-                  self.clients[srcAddress]['initialLobby'] = 0
-                  self.clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
-                  self.clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
                   print('[Notice] New client connected: ', str(srcAddress))
                   self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 1) # Tells client it has mutual connection established
                else:
@@ -129,6 +122,39 @@ class Server:
                   self.clients[srcAddress]['lastPong'] = datetime.now()
                else:
                   print('[Error] Client ping has invalid client address key! Aborting proceedure...')
+            elif msgDict['flag'] == 16: # Client Login
+               if self.checkVersion(msgDict['version']):
+                  print('[Notice] Received login attempt from: ', srcAddress)
+                  if serverAuth.loginAccount(msgDict['username'], msgDict['password']) == True:
+                     self.clients[srcAddress] = {}
+                     self.clients[srcAddress]['lastPong'] = datetime.now()
+                     self.clients[srcAddress]['username'] = msgDict['username']
+                     self.clients[srcAddress]['id'] = self.getNewClientID()
+                     self.clients[srcAddress]['ip'] = str(msgDict['ip'])
+                     self.clients[srcAddress]['port'] = str(msgDict['port'])
+                     self.clients[srcAddress]['initialLobby'] = 0
+                     self.clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
+                     self.clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 16) # Tells client it has logged in successfully
+                     print('[Notice] Client logged in as ' + msgDict['username'] + '.')
+                  else:
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 19) # Tells client login has failed
+                     print('[Notice] Client  ' + srcAddress + ' failed to log in.')
+               else:
+                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
+                  print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
+            elif msgDict['flag'] == 15: # Account registration
+               if self.checkVersion(msgDict['version']):
+                  print('[Notice] Received registration attempt from: ', srcAddress)
+                  if serverAuth.createAccount(msgDict['username'], msgDict['password']) == True:
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 15) # Tells client it has registered successfully
+                     print('[Notice] Client registered account: ', msgDict['username'])
+                  else:
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 18) # Tells client registration has failed
+                     print('[Notice] Client  ' + srcAddress + ' failed to register account.')
+               else:
+                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
+                  print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
@@ -221,6 +247,13 @@ class Server:
             #   sock.sendto(bytes(msgJson,'utf8'), (clients[targetClient]['ip'], int(clients[targetClient]['port']))) 
 
             self.clients_lock.release()
+
+   #Check if received version is the proper accepted version by the server
+   def checkVersion(self, receivedClientVersion):
+      if receivedClientVersion == self.acceptedClientVersion:
+         return True
+      else:
+         return False
 
 def main():
    myServer = Server()
