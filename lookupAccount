@@ -13,47 +13,37 @@ def lambda_handler(event, context):
     print(params)
     playerID = params['username']
     lookupPlayer(playerID)
-return {
-    'statusCode': 200,
-    'body': json.dumps('CreatingNewPlayer')
-}
-    return {
-'statusCode': 200,
-'body': json.dumps('HellLambda!')
-}
+
 
     
     
 def lookupPlayer(playerID):
 
-user = dynamodb.Table('MultiplayerProject')
-response = user.query(
-    KeyConditionExpression=Key('username').eq(playerID)
+    user = dynamodb.Table('MultiplayerProject')
+    response = user.query(
+        KeyConditionExpression=Key('username').eq(playerID)
 )
-items = response['Items']
-if items != null
-return false
+    items = response['Items']
+    if items != null :
+        return false
 
     resp_user = user.get_item(Key={'username':playerID})
     mmr = resp_user['mmr']
     totalGames = item['totalgames']
     gamesLost = item['loses']
     gamesWon = item['wins']
-    k/d = item['k/d']
+    kd = item['k/d']
     Deaths = item['deaths']
     Kills = item['kills']
-    
-   
-   Item={
+    Item={
         'username': playerID,
         'mmr' : mmr,
         'totalgames': totalGames,
         'wins' : gamesWon,
         'loses': gamesLost,
-        'k/d' : winPercentage,
+        'k/d' : kd,
         'kills' : Kills,
         'deaths': Deaths
     }
     return 'Item' in resp_user
-}
 

@@ -12,32 +12,38 @@ def lambda_handler(event, context):
     params = event['queryStringParameters']
     print(params)
     playerID = params['username']
-    password = params['password']
-    loginPlayer(playerID,password)
-return {
-    'statusCode': 200,
-    'body': json.dumps('CreatingNewPlayer')
-}
-    return {
-'statusCode': 200,
-'body': json.dumps('HellLambda!')
-}
+    lookupPlayer(playerID)
+
 
     
     
-def loginPlayer(playerID,password):
+def lookupPlayer(playerID):
 
-user = dynamodb.Table('MultiplayerProject')
-response = user.query(
-    KeyConditionExpression=Key('username').eq(playerID)
+    user = dynamodb.Table('MultiplayerProject')
+    response = user.query(
+        KeyConditionExpression=Key('username').eq(playerID)
 )
-items = response['Items']
+    items = response['Items']
+    if items != null :
+        return false
 
-chaeck if password matches with what user just wrote and if it does return true
-if items
-return true
-
-
-    return false
-
+    resp_user = user.get_item(Key={'username':playerID})
+    mmr = resp_user['mmr']
+    totalGames = item['totalgames']
+    gamesLost = item['loses']
+    gamesWon = item['wins']
+    kd = item['k/d']
+    Deaths = item['deaths']
+    Kills = item['kills']
+    Item={
+        'username': playerID,
+        'mmr' : mmr,
+        'totalgames': totalGames,
+        'wins' : gamesWon,
+        'loses': gamesLost,
+        'k/d' : kd,
+        'kills' : Kills,
+        'deaths': Deaths
+    }
+    return 'Item' in resp_user
 
