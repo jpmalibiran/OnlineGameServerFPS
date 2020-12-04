@@ -1,0 +1,68 @@
+import json
+import datetime 
+import boto3
+import decimal
+from boto3.dynamodb.conditions import Key, Attr
+
+dynamodb = boto3.resource('dynamodb')
+
+def lambda_handler(event, context):
+    table = dynamodb.Table('MultiplayerProject')
+    print(event)
+    params = event['queryStringParameters']
+    print(params)
+    playerID = params['username']
+    password = params['password']
+    makePlayer(playerID,password)
+return {
+    'statusCode': 200,
+    'body': json.dumps('CreatingNewPlayer')
+}
+    return {
+'statusCode': 200,
+'body': json.dumps('HellLambda!')
+}
+
+    
+    
+def makePlayer(playerID,password):
+
+// Check if Player with same username exists or not If yes return False.
+
+user = dynamodb.Table('MultiplayerProject')
+response = user.query(
+    KeyConditionExpression=Key('username').eq(playerID)
+)
+items = response['Items']
+if items != null
+return false
+
+//Make New Player with Username and Password.
+    user = dynamodb.Table('MultiplayerProject')
+    
+    username = playerID
+    Password = password 
+    totalGames = 0
+    gamesLost = 0 
+    gamesWon = 0
+    k/d = 0
+    kills = 0
+    deaths = 0
+    mmr = 1000
+    
+    user.put_item(
+   Item={
+        'username': username,
+	'password': Password
+        'totalgames': totalGames,
+        'wins' : gamesWon,
+        'loses': gamesLost,
+        'mmr' : mmr,
+        'k/d' : k/d,
+        'kills': kills,
+        'deaths': deaths
+    }
+)
+    return true
+
+

@@ -1,0 +1,43 @@
+import json
+import datetime 
+import boto3
+import decimal
+from boto3.dynamodb.conditions import Key, Attr
+
+dynamodb = boto3.resource('dynamodb')
+
+def lambda_handler(event, context):
+    table = dynamodb.Table('MultiplayerProject')
+    print(event)
+    params = event['queryStringParameters']
+    print(params)
+    playerID = params['username']
+    password = params['password']
+    loginPlayer(playerID,password)
+return {
+    'statusCode': 200,
+    'body': json.dumps('CreatingNewPlayer')
+}
+    return {
+'statusCode': 200,
+'body': json.dumps('HellLambda!')
+}
+
+    
+    
+def loginPlayer(playerID,password):
+
+user = dynamodb.Table('MultiplayerProject')
+response = user.query(
+    KeyConditionExpression=Key('username').eq(playerID)
+)
+items = response['Items']
+
+chaeck if password matches with what user just wrote and if it does return true
+if items
+return true
+
+
+    return false
+
+
