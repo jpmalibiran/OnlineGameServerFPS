@@ -1,0 +1,49 @@
+import json
+import datetime 
+import boto3
+import decimal
+from boto3.dynamodb.conditions import Key, Attr
+
+dynamodb = boto3.resource('dynamodb')
+
+def lambda_handler(event, context):
+    table = dynamodb.Table('MultiplayerProject')
+    print(event)
+    params = event['queryStringParameters']
+    print(params)
+    playerID = params['username']
+    lookupPlayer(playerID)
+
+
+    
+    
+def lookupPlayer(playerID):
+
+    user = dynamodb.Table('MultiplayerProject')
+    response = user.query(
+        KeyConditionExpression=Key('username').eq(playerID)
+)
+    items = response['Items']
+    if items != null :
+        return false
+
+    resp_user = user.get_item(Key={'username':playerID})
+    mmr = resp_user['mmr']
+    totalGames = item['totalgames']
+    gamesLost = item['loses']
+    gamesWon = item['wins']
+    kd = item['k/d']
+    Deaths = item['deaths']
+    Kills = item['kills']
+    Item={
+        'username': playerID,
+        'mmr' : mmr,
+        'totalgames': totalGames,
+        'wins' : gamesWon,
+        'loses': gamesLost,
+        'k/d' : kd,
+        'kills' : Kills,
+        'deaths': Deaths
+    }
+    return 'Item' in resp_user
+
