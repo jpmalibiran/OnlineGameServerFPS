@@ -13,6 +13,7 @@ import json
 import queue
 
 import auth as serverAuth
+import matchmaking as mmScr
 
 class Server:
 
@@ -38,7 +39,6 @@ class Server:
       #Server Settings
       self.port = 12345
       self.secondsBeforeClientTimeout = 6
-      self.matchMakingCountdown = 10
       self.keepServerRunning = True
       self.maintainConnectionLoop = True
       self.maintainProcessMessagesThread = True
@@ -47,6 +47,9 @@ class Server:
       self.isConnectionLoopRunning = False
       self.isProcessMessagesRunning = False
       self.isServerReady = False
+
+      #Server objects
+      self.matchMakingObj = mmScr.Matchmaking()
 
    # Sets up server; socket, threads
    def launchServer(self):
@@ -161,6 +164,10 @@ class Server:
       while True:
          self.routinePing(sock) #Pings every connected client; we expect a Pong message response from each of them. 
          self.routinePongCheck(sock) #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
+
+         #Subtract 2 seconds from the matchmaking coundown timer every loop. If the countdown reaches 0 create a lobby with the currently queued players.
+         if self.matchMakingObj.countdownTimer(-2):
+            print('[Notice] Matchmaking Commenced.')
 
          time.sleep(2)
 
