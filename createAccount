@@ -14,14 +14,20 @@ def lambda_handler(event, context):
     playerID = params['username']
     password = params['password']
     makePlayer(playerID,password)
-    #return {'statusCode': 200,    'body': json.dumps('CreatingNewPlayer')}
+    return {
+        'statusCode': 200,
+        'body': json.dumps(makePlayer(playerID,password))
+    }
 
     
     
-def makePlayer(playerID,password):#Check if Player with same username exists or not If yes return False.
+def makePlayer(playerID,password):
+
+#Check if Player with same username exists or not If yes return False.
+
     user = dynamodb.Table('MultiplayerProject')
     response = user.query(
-        KeyConditionExpression=Key('username').eq(playerID)
+    KeyConditionExpression=Key('username').eq(playerID)
 )
     items = response['Items']
     if items != null:
@@ -43,7 +49,7 @@ def makePlayer(playerID,password):#Check if Player with same username exists or 
     user.put_item(
    Item={
         'username': username,
-	    'password': Password,
+    	'password': Password,
         'totalgames': totalGames,
         'wins' : gamesWon,
         'loses': gamesLost,
