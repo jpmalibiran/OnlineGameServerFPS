@@ -51,6 +51,11 @@ class Server:
       #Server objects
       self.matchMakingObj = mmScr.Matchmaking(self)
 
+      #Socket
+      print('    Setting up socket... ')
+      self.moduleSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+      self.moduleSock.bind(('', self.port))
+
    # Sets up server; socket, threads
    def launchServer(self):
 
@@ -62,14 +67,14 @@ class Server:
       self.isServerRunning = True
 
       print('[Notice] Launching server: ')
-      print('    Setting up socket... ')
-      newSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-      newSock.bind(('', self.port))
+      
+      #newSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+      #newSock.bind(('', self.port))
 
       #start_new_thread(fastRoutines, (s,))
-      start_new_thread(self.connectionLoop, (newSock,))
-      start_new_thread(self.processMessages, (newSock,))
-      start_new_thread(self.slowRoutines, (newSock,))
+      start_new_thread(self.connectionLoop, (self.moduleSock,))
+      start_new_thread(self.processMessages, (self.moduleSock,))
+      start_new_thread(self.slowRoutines, (self.moduleSock,))
 
       time.sleep(0.4)
       self.CheckServerReady()
@@ -125,35 +130,35 @@ class Server:
                   self.clients[srcAddress]['lastPong'] = datetime.now()
                else:
                   print('[Error] Client ping has invalid client address key! Aborting proceedure...')
-            elif msgDict['flag'] == 16: # Client Login
+            elif msgDict['flag'] == 12: # Client Login
                if self.checkVersion(msgDict['version']):
                   print('[Notice] Received login attempt from: ', srcAddress)
                   if serverAuth.loginAccount(msgDict['username'], msgDict['password']) == True:
                      self.clients[srcAddress] = {}
                      self.clients[srcAddress]['lastPong'] = datetime.now()
                      self.clients[srcAddress]['username'] = msgDict['username']
-                     #self.clients[srcAddress]['id'] = self.getNewClientID()
+                     self.clients[srcAddress]['mmr'] = 1500
                      self.clients[srcAddress]['ip'] = str(msgDict['ip'])
                      self.clients[srcAddress]['port'] = str(msgDict['port'])
                      self.clients[srcAddress]['initialLobby'] = 0
                      self.clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
                      self.clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 16) # Tells client it has logged in successfully
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 12) # Tells client it has logged in successfully
                      print('[Notice] Client logged in as ' + msgDict['username'] + '.')
                   else:
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 19) # Tells client login has failed
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 15) # Tells client login has failed
                      print('[Notice] Client  ' + srcAddress + ' failed to log in.')
                else:
                   self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
                   print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
-            elif msgDict['flag'] == 15: # Account registration
+            elif msgDict['flag'] == 11: # Account registration
                if self.checkVersion(msgDict['version']):
                   print('[Notice] Received registration attempt from: ', srcAddress)
                   if serverAuth.createAccount(msgDict['username'], msgDict['password']) == True:
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 15) # Tells client it has registered successfully
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 11) # Tells client it has registered successfully
                      print('[Notice] Client registered account: ', msgDict['username'])
                   else:
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 18) # Tells client registration has failed
+                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 14) # Tells client registration has failed
                      print('[Notice] Client  ' + srcAddress + ' failed to register account.')
                else:
                   self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
@@ -161,11 +166,24 @@ class Server:
             elif msgDict['flag'] == 9: # Queue Matchmaking
                print('[Notice] Received matchmaking queue request from: ', srcAddress)
                if srcAddress in self.clients:
-                  self.matchMakingObj.addPlayerToQueue(srcAddress, 1500)
+                  self.matchMakingObj.addPlayerToQueue(srcAddress, 1500) #Add player to matchmaking queue
+                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 9) # Tells client it has joined matchmaking queue
+               else:
+                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 17) # Tells client it has failed to join matchmaking queue
+            elif msgDict['flag'] == 10: # leave Matchmaking
+               if srcAddress in self.clients:
+                  self.removePlayerFromQueueOrLobby(srcAddress)
+                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 10) # Tells client they have left the lobby
+            elif msgDict['flag'] == 13: # profile info request
+               if srcAddress in self.clients:
+                  self.fetchProfileData(msgDict['username'], srcAddress)
+               else:
+                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 16) # Tells client failed to fetch profile data
+                  
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
-      while True:
+      while self.isServerReady:
          self.routinePing(sock) #Pings every connected client; we expect a Pong message response from each of them. 
          self.routinePongCheck(sock) #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
 
@@ -266,8 +284,61 @@ class Server:
    def checkVersion(self, receivedClientVersion):
       if receivedClientVersion == self.acceptedClientVersion:
          return True
+      return False
+
+   def setPlayerCurrentLobby(self, address: str, lobbyKey: int):
+      if address in self.clients:
+         self.clients[address]['initialLobby'] = lobbyKey
+
+         return True
+      return False
+
+   def removePlayerFromQueueOrLobby(self, address: str):
+      if address in self.clients:
+         if self.clients[address]['initialLobby'] == 0:
+            self.matchMakingObj.removePlayerFromQueue(address)
+            print('[Notice] Removed player ' + address + ' from matchmaking queue.')
+         else:
+            self.matchMakingObj.removePlayerFromLobby(address, self.clients[address]['initialLobby'])
+            print('[Notice] Removed player ' + address + ' from lobby #' + self.clients[address]['initialLobby'])
       else:
-         return False
+         print('[Warning] Target client is not logged in; aborting operation...')
+
+   def fetchProfileData(self, targetAddress, receiverAddress):
+      if receiverAddress in self.clients:
+         fetchData = serverAuth.lookupAccount(self.clients[targetAddress]['username'])
+
+         if 'username' in fetchData:
+            if fetchData['username'] == 'n/a':
+               print('[Warning] Target client data not found.')
+               self.sendFlagMsg(self.moduleSock, self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
+               return False
+         else:
+            print('[Warning] Target client data not found.')
+            self.sendFlagMsg(self.moduleSock, self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
+            return False
+
+         if 'username' in fetchData and 'mmr' in fetchData and 'totalGames' in fetchData and 'wins' in fetchData and 'loses' in fetchData and 'kills' in fetchData and 'deaths' in fetchData and 'progress' in fetchData:
+            dataDict = {}
+            dataDict['flag'] = 13 #Enum Flag.FETCH_ACCOUNT
+            dataDict['username'] = fetchData['username']
+            dataDict['mmr'] = fetchData['mmr']
+            dataDict['totalGames'] = fetchData['totalGames']
+            dataDict['wins'] = fetchData['wins']
+            dataDict['loses'] = fetchData['loses']
+            dataDict['kills'] = fetchData['kills']
+            dataDict['deaths'] = fetchData['deaths']
+            dataDict['progress'] = fetchData['progress']
+            dataMsg = json.dumps(dataDict)
+
+            self.clients_lock.acquire()
+            self.moduleSock.sendto(bytes(dataMsg,'utf8'), (self.clients[receiverAddress]['ip'],int(self.clients[receiverAddress]['port'])))
+            self.clients_lock.release()
+            print('[Notice] Sent profile data of ' + self.clients[targetAddress]['username'] + ' to ' + receiverAddress)
+            return True   
+      print('[Warning] Receiver client is not logged in; aborting operation...')
+      self.sendFlagMsg(self.moduleSock, self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
+      return False
 
 def main():
    myServer = Server()

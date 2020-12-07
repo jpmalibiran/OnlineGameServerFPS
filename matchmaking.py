@@ -42,10 +42,25 @@ class Matchmaking:
 
         return False
 
-    def addPlayerToQueue(self, address: string, mmr: int):
+    def addPlayerToQueue(self, address: str, mmr: int):
         self.playersQueuing[address] = mmr
 
-    #TODO improve #TODO untested
+    def removePlayerFromQueue(self, address: str):
+        if address in self.playersQueuing:
+            self.playersQueuing.pop(address)
+            return True
+
+    def removePlayerFromLobby(self, address: str, lobbyKey: int):
+        if address in self.lobbies[lobbyKey]['players']:
+            self.lobbies[lobbyKey]['players'].remove(address)
+            return
+
+        #backup
+        for player in self.lobbies[lobbyKey]['players']:
+            if player == address:
+                self.lobbies[lobbyKey]['players'].remove(address)
+
+    #TODO improve
     def sortQueuedPlayers(self):
         #Skip process if there are no players queuing
         if len(self.playersQueuing) == 0:
@@ -92,6 +107,7 @@ class Matchmaking:
                 self.lobbies[newLobbyKey]['inMatch'] = False
                 self.lobbies[newLobbyKey]['players'] = list()
                 self.lobbies[newLobbyKey]['players'].append(playerClosestToAvg)
+                self.serverObjRef.setPlayerCurrentLobby(playerClosestToAvg, newLobbyKey)
                 print('    [Notice/MMQ] Added ' + playerClosestToAvg + ' with MMR:' + self.playersQueuing[playerClosestToAvg] + ' to lobby #' + newLobbyKey)
                 self.playersQueuing.pop(playerClosestToAvg)
             else:
@@ -101,6 +117,7 @@ class Matchmaking:
                         self.lobbies[lobbyKey]['inMatch'] = False
                         self.lobbies[lobbyKey]['players'] = list()
                         self.lobbies[lobbyKey]['players'].append(playerClosestToAvg)
+                        self.serverObjRef.setPlayerCurrentLobby(playerClosestToAvg, lobbyKey)
                         print('    [Notice/MMQ] Added ' + playerClosestToAvg + ' with MMR:' + self.playersQueuing[playerClosestToAvg] + ' to lobby #' + lobbyKey)
                         self.playersQueuing.pop(playerClosestToAvg)
                         lobbyWithSpaceFound = True
@@ -111,12 +128,17 @@ class Matchmaking:
                     self.lobbies[newLobbyKey]['inMatch'] = False
                     self.lobbies[newLobbyKey]['players'] = list()
                     self.lobbies[newLobbyKey]['players'].append(playerClosestToAvg)
+                    self.serverObjRef.setPlayerCurrentLobby(playerClosestToAvg, newLobbyKey)
                     print('    [Notice/MMQ] Added ' + playerClosestToAvg + ' with MMR:' + self.playersQueuing[playerClosestToAvg] + ' to lobby #' + newLobbyKey)
                     self.playersQueuing.pop(playerClosestToAvg)
 
-    #TODO untested
     def startFullLobbies(self):
+        if len(self.lobbies) <= 0:
+            print('[Notice/MMQ] No lobbies exist; skipping lobby match launches.')
+            return
+
         print('[Notice/MMQ] Commencing available lobby matches.')
+
         for lobbyKey in self.lobbies:
             #Start match if a lobby has players within self.minLobbyPlayers and self.maxLobbySlots
             if len(self.lobbies[lobbyKey]['players']) >= self.minLobbyPlayers and len(self.lobbies[lobbyKey]['players']) <= self.maxLobbySlots:
