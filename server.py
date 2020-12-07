@@ -1,6 +1,6 @@
 """
 Author: Joseph Malibiran
-Last Modified: December 2, 2020
+Last Modified: December 4, 2020
 """
 
 import random
@@ -49,7 +49,7 @@ class Server:
       self.isServerReady = False
 
       #Server objects
-      self.matchMakingObj = mmScr.Matchmaking()
+      self.matchMakingObj = mmScr.Matchmaking(self)
 
    # Sets up server; socket, threads
    def launchServer(self):
@@ -132,7 +132,7 @@ class Server:
                      self.clients[srcAddress] = {}
                      self.clients[srcAddress]['lastPong'] = datetime.now()
                      self.clients[srcAddress]['username'] = msgDict['username']
-                     self.clients[srcAddress]['id'] = self.getNewClientID()
+                     #self.clients[srcAddress]['id'] = self.getNewClientID()
                      self.clients[srcAddress]['ip'] = str(msgDict['ip'])
                      self.clients[srcAddress]['port'] = str(msgDict['port'])
                      self.clients[srcAddress]['initialLobby'] = 0
@@ -158,6 +158,10 @@ class Server:
                else:
                   self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
                   print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
+            elif msgDict['flag'] == 9: # Queue Matchmaking
+               print('[Notice] Received matchmaking queue request from: ', srcAddress)
+               if srcAddress in self.clients:
+                  self.matchMakingObj.addPlayerToQueue(srcAddress, 1500)
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
@@ -165,9 +169,12 @@ class Server:
          self.routinePing(sock) #Pings every connected client; we expect a Pong message response from each of them. 
          self.routinePongCheck(sock) #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
 
+         self.matchMakingObj.sortQueuedPlayers()
+
          #Subtract 2 seconds from the matchmaking coundown timer every loop. If the countdown reaches 0 create a lobby with the currently queued players.
          if self.matchMakingObj.countdownTimer(-2):
             print('[Notice] Matchmaking Commenced.')
+            self.matchMakingObj.startFullLobbies()
 
          time.sleep(2)
 
