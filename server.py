@@ -183,16 +183,18 @@ class Server:
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
-      while self.isServerReady:
-         self.routinePing(sock) #Pings every connected client; we expect a Pong message response from each of them. 
-         self.routinePongCheck(sock) #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
+      while True:
 
-         self.matchMakingObj.sortQueuedPlayers()
+         if self.isServerReady:
+            self.routinePing(sock) #Pings every connected client; we expect a Pong message response from each of them. 
+            self.routinePongCheck(sock) #If it has been too long since the last Pong response consider that client disconnected and clean up references in the server as well as connected clients
 
-         #Subtract 2 seconds from the matchmaking coundown timer every loop. If the countdown reaches 0 create a lobby with the currently queued players.
-         if self.matchMakingObj.countdownTimer(-2):
-            print('[Notice] Matchmaking Commenced.')
-            self.matchMakingObj.startFullLobbies()
+            self.matchMakingObj.sortQueuedPlayers()
+
+            #Subtract 2 seconds from the matchmaking coundown timer every loop. If the countdown reaches 0 create a lobby with the currently queued players.
+            if self.matchMakingObj.countdownTimer(-2):
+               print('[Notice] Matchmaking Commenced.')
+               self.matchMakingObj.startFullLobbies()
 
          time.sleep(2)
 
