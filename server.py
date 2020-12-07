@@ -56,7 +56,7 @@ class Server:
       self.moduleSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
       self.moduleSock.bind(('', self.port))
 
-   # Sets up server; socket, threads
+   # Sets up server threads
    def launchServer(self):
 
       if self.isServerRunning == True:
@@ -118,9 +118,9 @@ class Server:
             if msgDict['flag'] == 1: # New Client Connection. 
                if msgDict['version'] == self.acceptedClientVersion:
                   print('[Notice] New client connected: ', str(srcAddress))
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 1) # Tells client it has mutual connection established
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 1) # Tells client it has mutual connection established
                else:
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
                   print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
             elif msgDict['flag'] == 4: # Client Pong
                if self.verboseDebug:
@@ -143,42 +143,42 @@ class Server:
                      self.clients[srcAddress]['initialLobby'] = 0
                      self.clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
                      self.clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 12) # Tells client it has logged in successfully
+                     self.sendFlagMsg(msgDict['ip'], msgDict['port'], 12) # Tells client it has logged in successfully
                      print('[Notice] Client logged in as ' + msgDict['username'] + '.')
                   else:
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 15) # Tells client login has failed
+                     self.sendFlagMsg(msgDict['ip'], msgDict['port'], 15) # Tells client login has failed
                      print('[Notice] Client  ' + srcAddress + ' failed to log in.')
                else:
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
                   print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
             elif msgDict['flag'] == 11: # Account registration
                if self.checkVersion(msgDict['version']):
                   print('[Notice] Received registration attempt from: ', srcAddress)
                   if serverAuth.createAccount(msgDict['username'], msgDict['password']) == True:
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 11) # Tells client it has registered successfully
+                     self.sendFlagMsg(msgDict['ip'], msgDict['port'], 11) # Tells client it has registered successfully
                      print('[Notice] Client registered account: ', msgDict['username'])
                   else:
-                     self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 14) # Tells client registration has failed
+                     self.sendFlagMsg(msgDict['ip'], msgDict['port'], 14) # Tells client registration has failed
                      print('[Notice] Client  ' + srcAddress + ' failed to register account.')
                else:
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 8) # Tells client it has an invalid version
                   print('[Notice] Client failed to connect due to invalid version. ', msgDict['ip'] + ":"  + msgDict['port'])
             elif msgDict['flag'] == 9: # Queue Matchmaking
                print('[Notice] Received matchmaking queue request from: ', srcAddress)
                if srcAddress in self.clients:
                   self.matchMakingObj.addPlayerToQueue(srcAddress, 1500) #Add player to matchmaking queue
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 9) # Tells client it has joined matchmaking queue
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 9) # Tells client it has joined matchmaking queue
                else:
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 17) # Tells client it has failed to join matchmaking queue
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 17) # Tells client it has failed to join matchmaking queue
             elif msgDict['flag'] == 10: # leave Matchmaking
                if srcAddress in self.clients:
                   self.removePlayerFromQueueOrLobby(srcAddress)
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 10) # Tells client they have left the lobby
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 10) # Tells client they have left the lobby
             elif msgDict['flag'] == 13: # profile info request
                if srcAddress in self.clients:
                   self.fetchProfileData(msgDict['username'], srcAddress)
                else:
-                  self.sendFlagMsg(sock, msgDict['ip'], msgDict['port'], 16) # Tells client failed to fetch profile data
+                  self.sendFlagMsg(msgDict['ip'], msgDict['port'], 16) # Tells client failed to fetch profile data
                   
 
    #This thread focuses on jobs that will execute every 2 seconds. 
@@ -199,7 +199,7 @@ class Server:
          time.sleep(2)
 
    #Sends a message to client at provided address containing provided flag
-   def sendFlagMsg(self, sock, targetIP, targetPort, flagType):
+   def sendFlagMsg(self, targetIP, targetPort, flagType):
       if self.verboseDebug:
          print('[Routine] Sending flag to client ', targetIP + ":" + targetPort)
 
@@ -208,7 +208,30 @@ class Server:
       flagMsg = json.dumps(flagDict)
 
       self.clients_lock.acquire()
-      sock.sendto(bytes(flagMsg,'utf8'), (targetIP, int(targetPort)))
+      self.moduleSock.sendto(bytes(flagMsg,'utf8'), (targetIP, int(targetPort)))
+      self.clients_lock.release()
+   
+   #Sends a message to all connected clients
+   def sendMsgToAll(self, msg: str):
+      if self.verboseDebug:
+         print('[Routine] Sending message to all connected clients.')
+      
+      self.clients_lock.acquire()
+      for clientAddress in self.clients:
+         self.moduleSock.sendto(bytes(msg,'utf8'), (self.clients[clientAddress]['ip'], int(self.clients[clientAddress]['port'])))
+      self.clients_lock.release()
+
+   #Sends a message to every client in a specified lobby
+   def sendMsgToLobby(self, msg: str, lobby: int):
+      if lobby == 0:
+         return
+      if self.verboseDebug:
+         print('[Routine] Sending message to lobby #' + str(lobby))
+      
+      clientList = self.matchMakingObj.getLobbyPlayers(lobby)
+      self.clients_lock.acquire()
+      for clientAddress in clientList:
+         self.moduleSock.sendto(bytes(msg,'utf8'), (self.clients[clientAddress]['ip'], int(self.clients[clientAddress]['port'])))
       self.clients_lock.release()
 
    #Checks if the server is ready.
@@ -258,7 +281,7 @@ class Server:
       # Loop through clients
       for c in list(self.clients.keys()):
 
-         # Every loop, the server checks if a client has not sent a pong in the last 6 seconds.
+         # Every loop, the server checks if a client has not sent a pong in the last self.secondsBeforeClientTimeout seconds.
          if (datetime.now() - self.clients[c]['lastPong']).total_seconds() > self.secondsBeforeClientTimeout:
             droppedClientIP = str(self.clients[c]['ip'])
             droppedClientPort = str(self.clients[c]['port'])
@@ -269,8 +292,9 @@ class Server:
 
             #delete player from lobby if applicable TODO untested
             #removePlayerFromLobby(sock, dropedClientAddress)
+            self.disconnectClient()
 
-            del self.clients[dropedClientAddress]
+            #del self.clients[dropedClientAddress]
             
             #TODO Sends a message to all clients currently connected to inform them of the dropped player. 
             #updateClientsOnDisconnect()
@@ -291,7 +315,6 @@ class Server:
    def setPlayerCurrentLobby(self, address: str, lobbyKey: int):
       if address in self.clients:
          self.clients[address]['initialLobby'] = lobbyKey
-
          return True
       return False
 
@@ -313,11 +336,11 @@ class Server:
          if 'username' in fetchData:
             if fetchData['username'] == 'n/a':
                print('[Warning] Target client data not found.')
-               self.sendFlagMsg(self.moduleSock, self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
+               self.sendFlagMsg(self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
                return False
          else:
             print('[Warning] Target client data not found.')
-            self.sendFlagMsg(self.moduleSock, self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
+            self.sendFlagMsg(self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
             return False
 
          if 'username' in fetchData and 'mmr' in fetchData and 'totalGames' in fetchData and 'wins' in fetchData and 'loses' in fetchData and 'kills' in fetchData and 'deaths' in fetchData and 'progress' in fetchData:
@@ -339,8 +362,26 @@ class Server:
             print('[Notice] Sent profile data of ' + self.clients[targetAddress]['username'] + ' to ' + receiverAddress)
             return True   
       print('[Warning] Receiver client is not logged in; aborting operation...')
-      self.sendFlagMsg(self.moduleSock, self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
+      self.sendFlagMsg(self.clients[receiverAddress]['ip'], int(self.clients[receiverAddress]['port']), 16) # Tells client failed to fetch profile data
       return False
+
+   #TODO untested
+   def disconnectClient(self, insertAddress):
+      self.matchMakingObj.removePlayerFromQueue(insertAddress) #remove player from mm queue if they are there
+         
+      if insertAddress in self.clients:
+         if insertAddress in self.clients[insertAddress]['initialLobby']:
+            lobbyKey = self.clients[insertAddress]['initialLobby']
+            self.matchMakingObj.removePlayerFromLobby(insertAddress, lobbyKey)
+
+            if self.matchMakingObj.lobbies[lobbyKey]['inMatch'] == True:
+               dropDict = {}
+               dropDict['flag'] = 20 
+               dropDict['username'] = self.clients[insertAddress]['username']
+               dropMsg = json.dumps(dropDict)
+               self.sendMsgToLobby(dropMsg, lobbyKey)
+
+         self.clients.pop(insertAddress)
 
 def main():
    myServer = Server()
