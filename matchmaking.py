@@ -1,6 +1,6 @@
 """
 Author: Joseph Malibiran
-Last Modified: December 4, 2020
+Last Modified: December 9, 2020
 """
 
 import queue
@@ -11,7 +11,7 @@ class Matchmaking:
 
     def __init__(self, serverRef: serverScr.Server):
         self.lobbies = {} 
-        self.lobbyQueue = queue.Queue() #Queue of lobbies
+        #self.lobbyQueue = queue.Queue() #Queue of lobbies
         #self.playerLobbyQueue = queue.Queue() #Queue of players trying to join a match lobby
 
         #Debug Settings
@@ -27,7 +27,7 @@ class Matchmaking:
         self.matchMakingCountdownTimer = 10
         self.amountPlayerPerSort = 36
 
-        self.serverObjRef = serverRef
+        self.serverObjRef = serverRef #Server object reference
 
     def countdownTimer(self, additiveAmount: int):
         if self.matchMakingCountdownTimer > self.matchMakingCountdownAmount or self.matchMakingCountdownTimer <= 0:

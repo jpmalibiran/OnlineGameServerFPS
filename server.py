@@ -1,6 +1,6 @@
 """
 Author: Joseph Malibiran
-Last Modified: December 4, 2020
+Last Modified: December 9, 2020
 """
 
 import random
@@ -14,6 +14,7 @@ import queue
 
 import auth as serverAuth
 import matchmaking as mmScr
+import gameplay as gameScr
 
 class Server:
 
@@ -50,6 +51,7 @@ class Server:
 
       #Server objects
       self.matchMakingObj = mmScr.Matchmaking(self)
+      self.gameScr = gameScr.Gameplay(self, self.matchMakingObj)
 
       #Socket
       print('    Setting up socket... ')
@@ -141,8 +143,10 @@ class Server:
                      self.clients[srcAddress]['ip'] = str(msgDict['ip'])
                      self.clients[srcAddress]['port'] = str(msgDict['port'])
                      self.clients[srcAddress]['initialLobby'] = 0
-                     self.clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
-                     self.clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
+                     #self.clients[srcAddress]['position'] = {"x": 0,"y": 0,"z": 0}
+                     #self.clients[srcAddress]['orientation'] = {"yaw": 0,"pitch": 0}
+                     #self.clients[srcAddress]['latency'] = 0
+                     #self.clients[srcAddress]['health'] = 100
                      self.sendFlagMsg(msgDict['ip'], msgDict['port'], 12) # Tells client it has logged in successfully
                      print('[Notice] Client logged in as ' + msgDict['username'] + '.')
                   else:
@@ -287,12 +291,13 @@ class Server:
             droppedClientPort = str(self.clients[c]['port'])
             dropedClientAddress = droppedClientIP + ":" + droppedClientPort
             # Drop the client from the game.
-            print('[Notice] Dropped Client: ', droppedClientIP + ":" + droppedClientPort)
+            
             self.clients_lock.acquire()
 
             #delete player from lobby if applicable TODO untested
             #removePlayerFromLobby(sock, dropedClientAddress)
-            self.disconnectClient()
+            self.disconnectClient(dropedClientAddress)
+            print('[Notice] Dropped Client: ', droppedClientIP + ":" + droppedClientPort)
 
             #del self.clients[dropedClientAddress]
             
@@ -372,16 +377,56 @@ class Server:
       if insertAddress in self.clients:
          if insertAddress in self.clients[insertAddress]['initialLobby']:
             lobbyKey = self.clients[insertAddress]['initialLobby']
+
+            #If the player is in a lobby: remove player from lobby
             self.matchMakingObj.removePlayerFromLobby(insertAddress, lobbyKey)
 
+            #If player disconencts while in an ongoing match, update everyone on the match of the disconnected player
             if self.matchMakingObj.lobbies[lobbyKey]['inMatch'] == True:
                dropDict = {}
                dropDict['flag'] = 20 
                dropDict['username'] = self.clients[insertAddress]['username']
                dropMsg = json.dumps(dropDict)
                self.sendMsgToLobby(dropMsg, lobbyKey)
-
+         
+         #Lastly, remove disconnected player from the connected player list
          self.clients.pop(insertAddress)
+
+   #TODO functionality to be moved to gameplay.py
+   def updateGameMatch(self, insertLobbyKey):
+      if insertLobbyKey in self.matchMakingObj.lobbies:
+         if self.matchMakingObj.lobbies[insertLobbyKey]['inMatch'] == True:
+            if len(self.matchMakingObj.lobbies[insertLobbyKey]['players']) <= 0:
+               print('[Error] Cannot update match; lobby is not in an ongoing match.')
+               return
+
+            #Prepare client list
+            clientsDict = {}
+            clientsDict['flag'] = 19 #Flag.MATCH_UPDATE
+            clientsDict['flag']['players'] = []
+            
+            for clientKey in self.matchMakingObj.lobbies[insertLobbyKey]['players']:
+               playerDict = {}
+               playerDict['username'] = self.clients[clientKey]['username']
+               playerDict['position'] = self.clients[clientKey]['position']
+               playerDict['yaw'] = self.clients[clientKey]['yaw']
+               playerDict['pitch'] = self.clients[clientKey]['pitch']
+               playerDict['latency'] = self.clients[clientKey]['latency']
+               playerDict['health'] = self.clients[clientKey]['health']
+               clientsDict['flag']['players'].append(playerDict)
+
+            updateMsg = json.dumps(clientsDict)
+
+            #Send out client update list
+            self.sendMsgToLobby(updateMsg, insertLobbyKey)
+
+         else:
+            print('[Error] Cannot update match; lobby is not in an ongoing match.')
+            return
+      else:
+         print('[Error] Cannot update match; given lobby does not exist.')
+         return
+
 
 def main():
    myServer = Server()
