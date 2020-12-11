@@ -392,7 +392,7 @@ class Server:
          #Lastly, remove disconnected player from the connected player list
          self.clients.pop(insertAddress)
 
-   #TODO functionality to be moved to gameplay.py
+   #TODO functionality to be moved to gameplay.py. DEPRECATED
    def updateGameMatch(self, insertLobbyKey):
       if insertLobbyKey in self.matchMakingObj.lobbies:
          if self.matchMakingObj.lobbies[insertLobbyKey]['inMatch'] == True:
