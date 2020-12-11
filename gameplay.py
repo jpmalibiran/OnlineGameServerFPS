@@ -8,13 +8,14 @@ from _thread import *
 import threading
 import json
 
-import server as serverScr
-import matchmaking as mmScr
+#import server as serverScr
+#import matchmaking as mmScr
 
 class Gameplay:
 
-    def __init__(self, serverRef: serverScr.Server, mmRef: mmScr.Matchmaking):
-
+    #def __init__(self, serverRef: serverScr.Server, mmRef: mmScr.Matchmaking):
+    def __init__(self, serverRef, mmRef):
+        
         #Debug Settings
         self.verboseDebug = False
 

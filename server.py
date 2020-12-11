@@ -183,6 +183,12 @@ class Server:
                   self.fetchProfileData(msgDict['username'], srcAddress)
                else:
                   self.sendFlagMsg(msgDict['ip'], msgDict['port'], 16) # Tells client failed to fetch profile data
+            elif msgDict['flag'] == 19: #client movement update message
+               if srcAddress in self.clients:
+                  print('')
+                  self.gameScr.updateClientPositionData(srcAddress, msgDict['position']['x'], msgDict['position']['y'], msgDict['position']['z'], msgDict['orientation']['yaw'], msgDict['orientation']['pitch'])
+               else:
+                  print('[Error] Client is not connected; cannot process move update.')
                   
 
    #This thread focuses on jobs that will execute every 2 seconds. 

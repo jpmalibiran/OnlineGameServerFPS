@@ -22,8 +22,8 @@ def createAccount(username, password):
 def loginAccount(username, password):
     print(username + ' attempting to log in...')
     #TODO return True on successful login, return False on unsuccessful login
-    requests.get('https://2erht000f7.execute-api.us-east-2.amazonaws.com/default/loginAccount', params={'username': username, 'password': password})
-    return False
+    #requests.get('https://2erht000f7.execute-api.us-east-2.amazonaws.com/default/loginAccount', params={'username': username, 'password': password})
+    return True
 
 #This method gets the data about a particular user profile.
 def lookupAccount(username):
