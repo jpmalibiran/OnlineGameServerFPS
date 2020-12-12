@@ -15,7 +15,7 @@ class Matchmaking:
         #self.playerLobbyQueue = queue.Queue() #Queue of players trying to join a match lobby
 
         #Debug Settings
-        self.verboseDebug = True
+        self.verboseDebug = False
 
         self.playersQueuing = {} #Players queuing for a match
 

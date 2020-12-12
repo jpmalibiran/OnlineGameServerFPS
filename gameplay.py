@@ -37,7 +37,7 @@ class Gameplay:
         while self.matchThreads[lobbyKey]['persistent'] == True:
 
             self.updateMatchData(lobbyKey)
-            time.sleep(0.1) #Repeat 10 times per second
+            time.sleep(0.05) #Repeat 20 times per second
 
     def addClientMatchData(self, clientKey: str, lobbyKey: int):
         if clientKey in self.serverObjRef.clients:
@@ -74,19 +74,10 @@ class Gameplay:
         if clientKey in self.playersInMatchDict:
             self.playersInMatchDict[clientKey]['position'] = {'x': posX, 'y': posY, 'z': posZ}
             self.playersInMatchDict[clientKey]['orientation'] = {'yaw': getYaw, 'pitch': getPitch}
-            if self.verboseDebug == True:
-                print('[Temp debug] updateClientPositionData(): ')
-                print('[Temp debug] client: ' + str(self.playersInMatchDict[clientKey]['username']))
-                print('[Temp debug] position: (' + str(posX) + ', ' + str(posY) + ', ' + str(posZ) +')')
-                print('[Temp debug] yaw: ' + str(yaw))
-                print('[Temp debug] pitch: ' + str(pitch))
 
     #From server to each client connected to a match 
     def updateMatchData(self, lobbyKey:int):
-        print('[Temp debug] updateMatchData A: ')
         if lobbyKey in self.mmObjRef.lobbies:
-            
-            print('[Temp debug] updateMatchData B: ')
 
             if self.mmObjRef.lobbies[lobbyKey]['inMatch'] == False:
                 print('[Error] Cannot update match; lobby is not in a match.')
@@ -96,17 +87,13 @@ class Gameplay:
                 print('[Error] Cannot update match; lobby has no players.')
                 return
 
-            print('[Temp debug] updateMatchData C: ')
-
             #Prepare client list
             clientsDict = {}
             clientsDict['flag'] = 19 #Flag.MATCH_UPDATE
             clientsDict['players'] = []
 
             for clientKey in self.mmObjRef.lobbies[lobbyKey]['players']: #TODO untested
-                print('[Temp debug] for clientKey in self.mmObjRef.lobbies[lobbyKey][players]: ')
                 if clientKey in self.playersInMatchDict:
-                    print('[Temp debug] clientKey in self.playersInMatchDict: True')
                     playerDict = {}
                     playerDict['username'] = self.playersInMatchDict[clientKey]['username']
                     playerDict['position'] = {}
@@ -123,30 +110,16 @@ class Gameplay:
                 else:
                     print('[Temp debug] clientKey in self.playersInMatchDict: False')
 
-            print('[Temp debug] updateMatchData self.playersInMatchDict[clientKey] D: ')
-            print('[Temp debug] client: ' + str(self.playersInMatchDict[clientKey]['username']))
-            print('[Temp debug] position: (' + str(self.playersInMatchDict[clientKey]['position']['x']) + ', ' + str(self.playersInMatchDict[clientKey]['position']['y']) + ', ' + str(self.playersInMatchDict[clientKey]['position']['z']) +')')
-            print('[Temp debug] yaw: ' + str(self.playersInMatchDict[clientKey]['orientation']['yaw']))
-            print('[Temp debug] pitch: ' + str(self.playersInMatchDict[clientKey]['orientation']['pitch']))
-
-            print('[Temp debug] updateMatchData playerDict E: ')
-            print('[Temp debug] client: ' + str(playerDict['username']))
-            print('[Temp debug] position: (' + str(playerDict['position']['x']) + ', ' + str(playerDict['position']['y']) + ', ' + str(playerDict['position']['z']) +')')
-            print('[Temp debug] yaw: ' + str(playerDict['orientation']['yaw']))
-            print('[Temp debug] pitch: ' + str(playerDict['orientation']['pitch']))
-
             try:
                 updateMsg = json.dumps(clientsDict)
             except:
                 print('[Error] Failed to dump clients dictionary into JSON!')
 
-            print('[Temp debug] updateMatchData F: ')
             #time.sleep(0.001)
             self.serverObjRef.sendMsgToLobby(updateMsg, lobbyKey)
         else:
             print('[Error] Cannot update match; lobby does not exist.')
     
-
     #From client to server to each client in a match
     def updateHitScan(self, usernameOrigin: str, usernameTarget: str, lobbyKey:int, hitX: float, hitY: float, hitZ: float, damage: int, isHit: bool):
         if usernameOrigin in self.playersInMatchDict:
