@@ -15,12 +15,12 @@ class Matchmaking:
         #self.playerLobbyQueue = queue.Queue() #Queue of players trying to join a match lobby
 
         #Debug Settings
-        self.verboseDebug = False
+        self.verboseDebug = True
 
         self.playersQueuing = {} #Players queuing for a match
 
         self.maxLobbySlots = 6
-        self.minLobbyPlayers = 3
+        self.minLobbyPlayers = 2
         self.initialLobbyKey = 0
         self.lobbyKeyCounter = 0
         self.matchMakingCountdownAmount = 10
@@ -154,23 +154,25 @@ class Matchmaking:
 
         for lobbyKey in self.lobbies:
             #Start match if a lobby has players within self.minLobbyPlayers and self.maxLobbySlots
-            if len(self.lobbies[lobbyKey]['players']) >= self.minLobbyPlayers and len(self.lobbies[lobbyKey]['players']) <= self.maxLobbySlots:
+            if len(self.lobbies[lobbyKey]['players']) >= self.minLobbyPlayers and len(self.lobbies[lobbyKey]['players']) <= self.maxLobbySlots and self.lobbies[lobbyKey]['inMatch'] == False:
                 self.lobbies[lobbyKey]['inMatch'] = True
-                print('[Notice/MMQ] Match started.')
-                self.printLobbyPlayers(lobbyKey)
+                self.serverObjRef.startLobbyMatch(lobbyKey)
 
             #If there are insufficient players, lobby match cannot begin and players will have to wait until next time this function is called.
             #TODO The players will also be removed from the lobby and brought back into queue
-            elif len(self.lobbies[lobbyKey]['players']) < self.minLobbyPlayers and len(self.lobbies[lobbyKey]['players']) > 0:
+            elif len(self.lobbies[lobbyKey]['players']) < self.minLobbyPlayers and len(self.lobbies[lobbyKey]['players']) > 0 and self.lobbies[lobbyKey]['inMatch'] == False:
                 self.lobbies[lobbyKey]['inMatch'] = False
                 print('[Notice/MMQ] Not enough players; ' + str(len(self.lobbies[lobbyKey]['players'])) + ' players on lobby #' + str(lobbyKey))
                 self.printLobbyPlayers(lobbyKey)
+            elif self.lobbies[lobbyKey]['inMatch'] == True:
+                print('[Notice/MMQ] Ongoing match in lobby #' + str(lobbyKey))
 
             #Error outcomes
             elif len(self.lobbies[lobbyKey]['players']) > self.maxLobbySlots or len(self.lobbies[lobbyKey]['players']) < 0:
                 print('[ERROR/MMQ] Invalid player amount (' + str(len(self.lobbies[lobbyKey]['players'])) + ') on lobby #' + str(lobbyKey))
             else:
                 print('[ERROR/MMQ] Unexpected Error; ' + str(len(self.lobbies[lobbyKey]['players'])) + ' players on lobby #' + str(lobbyKey))
+
 
     def printLobbyPlayers(self, lobbyKey):
         lobbyList = ''

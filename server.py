@@ -185,11 +185,9 @@ class Server:
                   self.sendFlagMsg(msgDict['ip'], msgDict['port'], 16) # Tells client failed to fetch profile data
             elif msgDict['flag'] == 19: #client movement update message
                if srcAddress in self.clients:
-                  print('')
                   self.gameScr.updateClientPositionData(srcAddress, msgDict['position']['x'], msgDict['position']['y'], msgDict['position']['z'], msgDict['orientation']['yaw'], msgDict['orientation']['pitch'])
                else:
                   print('[Error] Client is not connected; cannot process move update.')
-                  
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
@@ -340,6 +338,40 @@ class Server:
       else:
          print('[Warning] Target client is not logged in; aborting operation...')
 
+   def startLobbyMatch(self, lobbyKey):
+        if lobbyKey in self.matchMakingObj.lobbies:
+
+            #Prepare message
+            clientsDict = {}
+            clientsDict['flag'] = 18 #Flag.MATCH_START
+            clientsDict['players'] = []
+
+            for playerAddress in self.matchMakingObj.lobbies[lobbyKey]['players']:
+               playerDict = {}
+               playerDict['username'] = self.clients[playerAddress]['username']
+               playerDict['position'] = {'x': 0, 'y': 0, 'z': 0}
+               playerDict['orientation'] = {'yaw': 0, 'pitch': 0}
+               playerDict['health'] = 100
+               clientsDict['players'].append(playerDict)
+
+               self.gameScr.addClientMatchData(playerAddress, lobbyKey) #Add player data to gameplay.py
+
+            clientsMsg = json.dumps(clientsDict)
+
+            self.clients_lock.acquire()
+            #Send message to every player in specified lobby
+            for playerAddress in self.matchMakingObj.lobbies[lobbyKey]['players']:
+               self.moduleSock.sendto(bytes(clientsMsg,'utf8'), (self.clients[playerAddress]['ip'],int(self.clients[playerAddress]['port'])))
+
+            self.clients_lock.release()
+
+            print('[Notice] Match started.')
+            self.matchMakingObj.printLobbyPlayers(lobbyKey)
+
+            self.gameScr.newMatchThread(lobbyKey) #Starts a new match thread that will routinely update the match lobby on player movements
+        else:
+            print('[Notice] Invalid lobby key; cannot start lobby match.')
+
    def fetchProfileData(self, targetAddress, receiverAddress):
       if receiverAddress in self.clients:
          fetchData = serverAuth.lookupAccount(self.clients[targetAddress]['username'])
@@ -381,7 +413,7 @@ class Server:
       self.matchMakingObj.removePlayerFromQueue(insertAddress) #remove player from mm queue if they are there
          
       if insertAddress in self.clients:
-         if insertAddress in self.clients[insertAddress]['initialLobby']:
+         if insertAddress == self.clients[insertAddress]['initialLobby']:
             lobbyKey = self.clients[insertAddress]['initialLobby']
 
             #If the player is in a lobby: remove player from lobby
@@ -397,42 +429,6 @@ class Server:
          
          #Lastly, remove disconnected player from the connected player list
          self.clients.pop(insertAddress)
-
-   #TODO functionality to be moved to gameplay.py. DEPRECATED
-   def updateGameMatch(self, insertLobbyKey):
-      if insertLobbyKey in self.matchMakingObj.lobbies:
-         if self.matchMakingObj.lobbies[insertLobbyKey]['inMatch'] == True:
-            if len(self.matchMakingObj.lobbies[insertLobbyKey]['players']) <= 0:
-               print('[Error] Cannot update match; lobby is not in an ongoing match.')
-               return
-
-            #Prepare client list
-            clientsDict = {}
-            clientsDict['flag'] = 19 #Flag.MATCH_UPDATE
-            clientsDict['flag']['players'] = []
-            
-            for clientKey in self.matchMakingObj.lobbies[insertLobbyKey]['players']:
-               playerDict = {}
-               playerDict['username'] = self.clients[clientKey]['username']
-               playerDict['position'] = self.clients[clientKey]['position']
-               playerDict['yaw'] = self.clients[clientKey]['yaw']
-               playerDict['pitch'] = self.clients[clientKey]['pitch']
-               playerDict['latency'] = self.clients[clientKey]['latency']
-               playerDict['health'] = self.clients[clientKey]['health']
-               clientsDict['flag']['players'].append(playerDict)
-
-            updateMsg = json.dumps(clientsDict)
-
-            #Send out client update list
-            self.sendMsgToLobby(updateMsg, insertLobbyKey)
-
-         else:
-            print('[Error] Cannot update match; lobby is not in an ongoing match.')
-            return
-      else:
-         print('[Error] Cannot update match; given lobby does not exist.')
-         return
-
 
 def main():
    myServer = Server()
