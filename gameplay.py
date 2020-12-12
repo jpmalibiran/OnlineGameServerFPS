@@ -27,6 +27,7 @@ class Gameplay:
         self.mmObjRef = mmRef
 
     def newMatchThread(self, lobbyKey: int):
+        print('[Notice/Game] Starting new match thread...')
         start_new_thread(self.matchThread, (lobbyKey,))
     
     def matchThread(self, lobbyKey: int):
