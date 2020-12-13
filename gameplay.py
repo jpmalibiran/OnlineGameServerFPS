@@ -53,14 +53,14 @@ class Gameplay:
             self.playersInMatchDict[clientKey]['kills'] = 0
             self.playersInMatchDict[clientKey]['deaths'] = 0
         else:
-            print('[Error] Invalid client key or client is not connected to server.')
+            print('[Error/Game] Invalid client key or client is not connected to server.')
 
 
     def removeClientMatchData(self, clientKey: str):
         if clientKey in self.playersInMatchDict:
             self.playersInMatchDict.pop(clientKey)
         else:
-            print('[Error] Invalid client key or client is not in match.')
+            print('[Error/Game] Invalid client key or client is not in match.')
 
     def removeAllLobbyMatchData(self, lobbyKey: int):
         if len(self.playersInMatchDict) <= 0:
@@ -81,11 +81,11 @@ class Gameplay:
         if lobbyKey in self.mmObjRef.lobbies:
 
             if self.mmObjRef.lobbies[lobbyKey]['inMatch'] == False:
-                print('[Error] Cannot update match; lobby is not in a match.')
+                print('[Error/Game] Cannot update match; lobby is not in a match.')
                 return
 
             if len(self.mmObjRef.lobbies[lobbyKey]['players']) <= 0:
-                print('[Error] Cannot update match; lobby has no players.')
+                print('[Error/Game] Cannot update match; lobby has no players.')
                 return
 
             #Prepare client list
@@ -108,54 +108,65 @@ class Gameplay:
                     #playerDict['latency'] = self.playersInMatchDict[clientKey]['latency']
                     playerDict['health'] = self.playersInMatchDict[clientKey]['health']
                     clientsDict['players'].append(playerDict)
+
+                    #if self.verboseDebug:
+                        #print('[Temp Debug] self.playersInMatchDict[clientKey]: ' + clientKey)
+                        #print('    position: (' + str(self.playersInMatchDict[clientKey]['position']['x']) + ', ' + str(self.playersInMatchDict[clientKey]['position']['y']) + ', ' + str(self.playersInMatchDict[clientKey]['position']['z']) + ') ')
+                        #print('    orientation: (' + str(self.playersInMatchDict[clientKey]['orientation']['pitch']) + ', ' + str(self.playersInMatchDict[clientKey]['orientation']['yaw']) + ') ')
+                        #print('    health: ' + str(self.playersInMatchDict[clientKey]['health']))
                 else:
                     print('[Temp debug] clientKey in self.playersInMatchDict: False')
 
             try:
                 updateMsg = json.dumps(clientsDict)
             except:
-                print('[Error] Failed to dump clients dictionary into JSON!')
+                print('[Error/Game] Failed to dump clients dictionary into JSON!')
 
             #time.sleep(0.001)
             self.serverObjRef.sendMsgToLobby(updateMsg, lobbyKey)
         else:
-            print('[Error] Cannot update match; lobby does not exist.')
+            print('[Error/Game] Cannot update match; lobby does not exist.')
     
     #From client to server to each client in a match
     def updateHitScan(self, usernameOrigin: str, usernameTarget: str, lobbyKey:int, hitX: float, hitY: float, hitZ: float, damage: int, isHit: bool):
-        if usernameOrigin in self.playersInMatchDict:
+        print('[Notice] Sending hitscan shot update to lobby...')
 
-            if not(usernameTarget in self.playersInMatchDict):
-                print('[Error] usernameTarget is not in a match; cannot update gunfire data.')
-                return
+        #Prepare gunfire network message
+        gunFireDict = {}
+        gunFireDict['flag'] = 21
+        gunFireDict['usernameOrigin'] = usernameOrigin
+        gunFireDict['usernameTarget'] = usernameTarget
+        gunFireDict['hitPosition'] = {'x': hitX, 'y': hitY, 'z': hitZ}
+        gunFireDict['damage'] = damage
+        gunFireDict['isHit'] = isHit
 
-            #Prepare gunfire network message
-            gunFireDict = {}
-            gunFireDict['flag'] = 21
-            gunFireDict['usernameOrigin'] = usernameOrigin
-            gunFireDict['usernameTarget'] = usernameTarget
-            gunFireDict['hitPosition'] = {'x': hitX, 'y': hitY, 'z': hitZ}
-            gunFireDict['damage'] = damage
-            gunFireDict['isHit'] = isHit
-
-            gunFireMsg = json.dumps(gunFireDict)
-            self.serverObjRef.sendMsgToLobby(gunFireMsg, lobbyKey)
-        else:
-            print('[Error] usernameOrigin is not in a match; cannot update gunfire data.')
+        gunFireMsg = json.dumps(gunFireDict)
+        #self.serverObjRef.sendMsgToLobby(gunFireMsg, lobbyKey)
+        self.serverObjRef.sendMsgToLobbyExclude(gunFireMsg, lobbyKey, usernameOrigin)
 
     #From client to server to each client in a match
     def updateMissShot(self, usernameOrigin: str, lobbyKey:int, hitX: float, hitY: float, hitZ: float):
-        if usernameOrigin in self.playersInMatchDict:
-            #Prepare gunfire network message
-            gunFireDict = {}
-            gunFireDict['flag'] = 22
-            gunFireDict['usernameOrigin'] = usernameOrigin
-            gunFireDict['hitPosition'] = {'x': hitX, 'y': hitY, 'z': hitZ}
+        proceed = False
 
-            gunFireMsg = json.dumps(gunFireDict)
-            self.serverObjRef.sendMsgToLobby(gunFireMsg, lobbyKey)
-        else:
-            print('[Error] usernameOrigin is not in a match; cannot update gunfire data.')
+        for clientKey in self.playersInMatchDict:
+            if self.playersInMatchDict[clientKey]['username'] == usernameOrigin:
+                proceed = True
+
+        if proceed == False:
+            print('[Error/Game] usernameOrigin not in self.playersInMatchDict; aborting operation')
+            return
+
+        print('[Notice/Game] Sending miss shot update to lobby...')
+
+        #Prepare gunfire network message
+        gunFireDict = {}
+        gunFireDict['flag'] = 22
+        gunFireDict['usernameOrigin'] = usernameOrigin
+        gunFireDict['hitPosition'] = {'x': hitX, 'y': hitY, 'z': hitZ}
+
+        gunFireMsg = json.dumps(gunFireDict)
+        #self.serverObjRef.sendMsgToLobby(gunFireMsg, lobbyKey)
+        self.serverObjRef.sendMsgToLobbyExclude(gunFireMsg, lobbyKey, usernameOrigin)
 
     def checkGameEnd(self):
         print('')

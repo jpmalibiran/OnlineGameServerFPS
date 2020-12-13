@@ -252,10 +252,28 @@ class Server:
       if self.verboseDebug:
          print('[Routine] Sending message to lobby #' + str(lobby))
       
-      clientList = self.matchMakingObj.getLobbyPlayers(lobby)
+      clientLobbyList = self.matchMakingObj.getLobbyPlayers(lobby)
       self.clients_lock.acquire()
-      for clientAddress in clientList:
+      for clientAddress in clientLobbyList:
          self.moduleSock.sendto(bytes(msg,'utf8'), (self.clients[clientAddress]['ip'], int(self.clients[clientAddress]['port'])))
+
+      self.clients_lock.release()
+
+   #Sends a message to every client in a specified lobby
+   def sendMsgToLobbyExclude(self, msg: str, lobby: int, exclude: str):
+      if lobby == 0:
+         return
+      if self.verboseDebug:
+         print('[Routine] Sending message to lobby #' + str(lobby))
+      
+      clientLobbyList = self.matchMakingObj.getLobbyPlayers(lobby)
+      self.clients_lock.acquire()
+      for clientAddress in clientLobbyList:
+         if self.clients[clientAddress]['username'] == exclude:
+            print('[Notice] ' + clientAddress + ' excluded from lobby message.')
+         else:
+            self.moduleSock.sendto(bytes(msg,'utf8'), (self.clients[clientAddress]['ip'], int(self.clients[clientAddress]['port'])))
+
       self.clients_lock.release()
 
    #Checks if the server is ready.
