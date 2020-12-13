@@ -188,6 +188,22 @@ class Server:
                   self.gameScr.updateClientPositionData(srcAddress, msgDict['position']['x'], msgDict['position']['y'], msgDict['position']['z'], msgDict['orientation']['yaw'], msgDict['orientation']['pitch'])
                else:
                   print('[Error] Client is not connected; cannot process move update.')
+            elif msgDict['flag'] == 22: #miss gunfire update message
+               if srcAddress in self.clients:
+                  if self.clients[srcAddress]['initialLobby'] > 0:
+                     self.gameScr.updateMissShot(msgDict['usernameOrigin'], self.clients[srcAddress]['initialLobby'], msgDict['hitPosition']['x'], msgDict['hitPosition']['y'], msgDict['hitPosition']['z'])
+                  else:
+                     print('[Error] Invalid Lobby; cannot update miss gunfire.')
+               else:
+                  print('[Error] Client is not connected; cannot update miss gunfire.')
+            elif msgDict['flag'] == 21: #hit gunfire message
+               if srcAddress in self.clients:
+                  if self.clients[srcAddress]['initialLobby'] > 0:
+                     self.gameScr.updateHitScan(msgDict['usernameOrigin'], msgDict['usernameTarget'], self.clients[srcAddress]['initialLobby'], msgDict['hitPosition']['x'], msgDict['hitPosition']['y'], msgDict['hitPosition']['z'], msgDict['damage'], msgDict['isHit'])
+                  else:
+                     print('[Error] Invalid Lobby; cannot update gunfire.')
+               else:
+                  print('[Error] Client is not connected; cannot update gunfire.')
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
