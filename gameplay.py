@@ -7,6 +7,7 @@ from datetime import datetime
 from _thread import *
 import threading
 import json
+import random
 
 #import server as serverScr
 #import matchmaking as mmScr
@@ -46,7 +47,7 @@ class Gameplay:
             self.playersInMatchDict[clientKey]['username'] = self.serverObjRef.clients[clientKey]['username']
             self.playersInMatchDict[clientKey]['address'] = self.serverObjRef.clients[clientKey]['ip'] + ':' + str(self.serverObjRef.clients[clientKey]['port'])
             self.playersInMatchDict[clientKey]['lobbyKey'] = lobbyKey
-            self.playersInMatchDict[clientKey]['position'] = {"x": 0,"y": 0,"z": 0}
+            self.playersInMatchDict[clientKey]['position'] = {"x": random.randrange(-30,30),"y": 10,"z": random.randrange(-30,30)}
             self.playersInMatchDict[clientKey]['orientation'] = {"yaw": 0,"pitch": 0}
             self.playersInMatchDict[clientKey]['latency'] = 0
             self.playersInMatchDict[clientKey]['health'] = 100
@@ -54,7 +55,6 @@ class Gameplay:
             self.playersInMatchDict[clientKey]['deaths'] = 0
         else:
             print('[Error/Game] Invalid client key or client is not connected to server.')
-
 
     def removeClientMatchData(self, clientKey: str):
         if clientKey in self.playersInMatchDict:
@@ -167,6 +167,25 @@ class Gameplay:
         gunFireMsg = json.dumps(gunFireDict)
         #self.serverObjRef.sendMsgToLobby(gunFireMsg, lobbyKey)
         self.serverObjRef.sendMsgToLobbyExclude(gunFireMsg, lobbyKey, usernameOrigin)
+
+    def relocatePlayer(self, clientKey):
+        if clientKey in self.playersInMatchDict:
+            self.playersInMatchDict[clientKey]['position']['x'] = random.randrange(-30,30)
+            self.playersInMatchDict[clientKey]['position']['y'] = 10
+            self.playersInMatchDict[clientKey]['position']['z'] = random.randrange(-30,30)
+        
+            respawnDict = {}
+            respawnDict['flag'] = 24
+            respawnDict['position'] = {}
+            respawnDict['position']['x'] = self.playersInMatchDict[clientKey]['position']['x']
+            respawnDict['position']['y'] = self.playersInMatchDict[clientKey]['position']['y']
+            respawnDict['position']['z'] = self.playersInMatchDict[clientKey]['position']['z']
+
+            respawnMsg = json.dumps(respawnDict)
+            self.serverObjRef.sendMsg(clientKey, respawnMsg)
+        else:
+            print('[Error] Client is not in a match; cannot relocate player.')
+
 
     def checkGameEnd(self):
         print('')

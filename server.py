@@ -189,6 +189,7 @@ class Server:
                else:
                   print('[Error] Client is not connected; cannot process move update.')
             elif msgDict['flag'] == 22: #miss gunfire update message
+               print('[Notice] Received miss gunfire message...')
                if srcAddress in self.clients:
                   if self.clients[srcAddress]['initialLobby'] > 0:
                      self.gameScr.updateMissShot(msgDict['usernameOrigin'], self.clients[srcAddress]['initialLobby'], msgDict['hitPosition']['x'], msgDict['hitPosition']['y'], msgDict['hitPosition']['z'])
@@ -197,6 +198,7 @@ class Server:
                else:
                   print('[Error] Client is not connected; cannot update miss gunfire.')
             elif msgDict['flag'] == 21: #hit gunfire message
+               print('[Notice] Received gunfire message...')
                if srcAddress in self.clients:
                   if self.clients[srcAddress]['initialLobby'] > 0:
                      self.gameScr.updateHitScan(msgDict['usernameOrigin'], msgDict['usernameTarget'], self.clients[srcAddress]['initialLobby'], msgDict['hitPosition']['x'], msgDict['hitPosition']['y'], msgDict['hitPosition']['z'], msgDict['damage'], msgDict['isHit'])
@@ -204,6 +206,12 @@ class Server:
                      print('[Error] Invalid Lobby; cannot update gunfire.')
                else:
                   print('[Error] Client is not connected; cannot update gunfire.')
+            elif msgDict['flag'] == 23: #death message
+               print('[Notice] Received death message...')
+               if srcAddress in self.clients:
+                  self.gameScr.relocatePlayer(srcAddress)
+               else:
+                  print('[Error] Client is not connected; cannot respawn player.')
 
    #This thread focuses on jobs that will execute every 2 seconds. 
    def slowRoutines(self, sock):
@@ -233,6 +241,15 @@ class Server:
 
       self.clients_lock.acquire()
       self.moduleSock.sendto(bytes(flagMsg,'utf8'), (targetIP, int(targetPort)))
+      self.clients_lock.release()
+
+      #Sends a message to client at provided address containing provided flag
+   def sendMsg(self, address, msg):
+      if self.verboseDebug:
+         print('[Routine] Sending message to client ', address)
+
+      self.clients_lock.acquire()
+      self.moduleSock.sendto(bytes(msg,'utf8'), (self.clients[address]['ip'], int(self.clients[address]['port'])))
       self.clients_lock.release()
    
    #Sends a message to all connected clients
@@ -383,7 +400,7 @@ class Server:
             for playerAddress in self.matchMakingObj.lobbies[lobbyKey]['players']:
                playerDict = {}
                playerDict['username'] = self.clients[playerAddress]['username']
-               playerDict['position'] = {'x': 0, 'y': 0, 'z': 0}
+               playerDict['position'] = {'x': random.randrange(-30,30), 'y': 10, 'z': random.randrange(-30,30)}
                playerDict['orientation'] = {'yaw': 0, 'pitch': 0}
                playerDict['health'] = 100
                clientsDict['players'].append(playerDict)
